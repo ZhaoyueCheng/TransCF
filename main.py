@@ -4,12 +4,12 @@ def parse_args():
     
     parser = argparse.ArgumentParser(description="Run Recommender")
 
-    parser.add_argument('--recommender', nargs='?', help='Choose a recommender.', required=True)
-    parser.add_argument('--dataset', nargs='?', help='Choose a dataset.', required=True)        
-    parser.add_argument('--lRate', type=float, default=0.001, help='Learning rate.', required=True)
-    parser.add_argument('--mode', nargs='?', help='Validation or Test (Val, Test)', required=True)
+    parser.add_argument('--recommender', nargs='?', default='TransCF', help='Choose a recommender.')
+    parser.add_argument('--dataset', nargs='?', default='delicious', help='Choose a dataset.')
+    parser.add_argument('--lRate', type=float, default=0.001, help='Learning rate.')
+    parser.add_argument('--mode', nargs='?', default='Val', help='Validation or Test (Val, Test)')
     parser.add_argument('--early_stop', type=int, default=50, help='Early stop iteration.')
-    parser.add_argument('--topK', nargs='?', default='[1,5,10,20,50]', help="topK")
+    parser.add_argument('--Ks', nargs='?', default='[5,10,20]', help="topK")
     parser.add_argument('--numEpoch', type=int, default=500, help='Number of epochs.')
     parser.add_argument('--num_negatives', type=int, default=100, help='Number of negative samples.')
     parser.add_argument('--margin', type=float, default=1.0, help='Margin.')
@@ -18,8 +18,9 @@ def parse_args():
     parser.add_argument('--cuda', type=int, default=0, help='Speficy GPU number')
     parser.add_argument('--reg1', type=float, default=0.01, help='Distance Regularization.')
     parser.add_argument('--reg2', type=float, default=0.01, help='Neighborhood Regularization.')
-    parser.add_argument('--embedding_dim', type=int, default=10, help='Number of embedding dimensions.')
+    parser.add_argument('--embedding_dim', type=int, default=50, help='Number of embedding dimensions.')
     parser.add_argument('--rand_seed', type=int, default=34567, help='Random seed.')
+    parser.add_argument('--path', type=str, default='data/Amazon-CD', help='Random seed.')
     
     
     

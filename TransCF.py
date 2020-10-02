@@ -10,6 +10,7 @@ from torch.backends import cudnn
 from torch.utils.data import DataLoader
 import random
 import fastrand
+from tqdm import tqdm
 
 class TransCF(Recommender):
     def __init__(self, args):
@@ -23,7 +24,7 @@ class TransCF(Recommender):
         else:
             self.clip_max = torch.FloatTensor([1.0])
         
-        self.test = self.getTestInstances()
+        # self.test = self.getTestInstances()
 
     # Training
     def training(self):
@@ -36,25 +37,29 @@ class TransCF(Recommender):
         
         # Initial performance
         model.eval()
-        topHits, topNdcgs, topMrrs = self.evalScore(model)
+        # results = self.evalScore(model)
         model.train()
+
+        # print('\t'.join([str(round(x, 4)) for x in results[1]]))
+        # print('\t'.join([str(round(x, 4)) for x in results[-1]]))
         
-        print("[%s] [Initial %s] %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f"%(self.recommender, self.currentTime(), topHits[1], topHits[5], topHits[10], topHits[20], topHits[50], topNdcgs[1], topNdcgs[5], topNdcgs[10], topNdcgs[20], topNdcgs[50], topMrrs[1], topMrrs[5], topMrrs[10], topMrrs[20], topMrrs[50]))
+        # print("[%s] [Initial %s] %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f"%(self.recommender, self.currentTime(), topHits[1], topHits[5], topHits[10], topHits[20], topHits[50], topNdcgs[1], topNdcgs[5], topNdcgs[10], topNdcgs[20], topNdcgs[50], topMrrs[1], topMrrs[5], topMrrs[10], topMrrs[20], topMrrs[50]))
         
 
-        bestHR = 0
-        bestNDCG = 0
-        early_stop_metric = []
-        for epoch in range(self.numEpoch):
+        # bestHR = 0
+        # bestNDCG = 0
+        # early_stop_metric = []
+        for epoch in tqdm(range(self.numEpoch)):
             totalLoss = 0
             # Reading Data
             totalData = self.getTrainInstances()
+            print(len(totalData))
             train_by_dataloader = Dataset_TransCF(totalData)
             train_loader = DataLoader(dataset=train_by_dataloader, batch_size=self.batch_size, shuffle=True)
-            for batch_idx, batch in enumerate(train_loader):
-                u = Variable(batch['u'])
-                i = Variable(batch['i'])
-                j = Variable(batch['j'])
+            for batch_idx, batch in enumerate(tqdm(train_loader)):
+                u = torch.LongTensor(batch['u'])
+                i = torch.LongTensor(batch['i'])
+                j = torch.LongTensor(batch['j'])
                 
                 i_viewed_u_idx, i_viewed_u_offset, u_viewed_i_idx, u_viewed_i_offset = self.getNeighbors(u, i)
                 j_viewed_u_idx, j_viewed_u_offset, u_viewed_j_idx, u_viewed_j_offset = self.getNeighbors(u, j)
@@ -70,9 +75,9 @@ class TransCF(Recommender):
                 neg, _ = model(u, j, u_viewed_j_idx, u_viewed_j_offset, j_viewed_u_idx, j_viewed_u_offset)
 
                 if self.cuda_available == True:
-                    loss = criterion(pos, neg, Variable(torch.FloatTensor([-1])).cuda(self.cuda))
+                    loss = criterion(pos, neg, (torch.FloatTensor([-1])).cuda(self.cuda))
                 else:
-                    loss = criterion(pos, neg, Variable(torch.FloatTensor([-1])))
+                    loss = criterion(pos, neg, torch.FloatTensor([-1]))
                 
                 for elem, regx in zip([self.reg1, self.reg2], reg):
                     loss += elem * regx
@@ -80,7 +85,7 @@ class TransCF(Recommender):
                 loss.backward()
                 optimizer.step()
 
-                totalLoss += loss.data[0]
+                totalLoss += loss.item()
             
             # Unit-norm regularization
             model.userEmbed.weight.data.div_(torch.max(torch.norm(model.userEmbed.weight.data, 2, 1, True), self.clip_max).expand_as(model.userEmbed.weight.data))
@@ -89,13 +94,16 @@ class TransCF(Recommender):
             # Evaluate the performance every three iterations (for running time issue)
             if epoch % 3 == 0:
                 model.eval()
-                topHits, topNdcgs, topMrrs = self.evalScore(model)
+                results = self.evalScore(model)
                 model.train()
+
+                print('\t'.join([str(round(x, 4)) for x in results[1]]))
+                print('\t'.join([str(round(x, 4)) for x in results[-1]]))
             
-            if self.is_converged(model, epoch, totalLoss, topHits, topNdcgs, topMrrs):
-                return
+            # if self.is_converged(model, epoch, totalLoss, topHits, topNdcgs, topMrrs):
+            #     return
             
-        self.printFinalResult()
+        # self.printFinalResult()
     
     
     
@@ -114,8 +122,8 @@ class modeler(nn.Module):
         nn.init.normal(self.itemEmbed.weight.data, mean=0.0, std=0.01)
 
     def forward(self, u, i, u_viewed_i_idx, u_viewed_i_offset, i_viewed_u_idx, i_viewed_u_offset):
-        userIdx = Variable(torch.LongTensor(range(0,len(u))))
-        itemIdx = Variable(torch.LongTensor(range(0,len(i))))
+        userIdx = torch.LongTensor(range(0, len(u)))
+        itemIdx = torch.LongTensor(range(0, len(i)))
         if self.cuda_available == True:
             userIdx = userIdx.cuda(self.gpunum)
             itemIdx = itemIdx.cuda(self.gpunum)

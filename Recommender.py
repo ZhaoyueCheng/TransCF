@@ -1,13 +1,14 @@
 import time
 import pandas as pd
 import math
-from Dataset import Dataset
+from Dataset import DatasetNew
 import numpy as np
 import torch
 from torch.autograd import Variable
 import heapq
 import evaluation
 import fastrand
+from tqdm import trange
 
 class Recommender(object):
     def __init__(self, args):
@@ -17,7 +18,7 @@ class Recommender(object):
         self.batch_size = args.batch_size
         self.embedding_dim = args.embedding_dim
         self.lRate = args.lRate
-        self.topK = eval(args.topK)
+        self.Ks = [5, 10, 20]
         self.reg1 = args.reg1
         self.reg2 = args.reg2
         self.num_negatives = args.num_negatives
@@ -29,18 +30,22 @@ class Recommender(object):
         self.cuda = args.cuda
         self.batchSize_test = args.batchSize_test
         self.early_stop = args.early_stop
+        self.path = args.path
         
-        self.totalFilename = 'data/'+self.dataset+'/ratings.dat'
-        self.trainFilename = 'data/'+self.dataset+'/LOOTrain.dat'
-        self.valFilename = 'data/'+self.dataset+'/LOOVal.dat'
-        self.testFilename = 'data/'+self.dataset+'/LOOTest.dat'
-        self.negativesFilename = 'data/'+self.dataset+'/LOONegatives.dat'
-        
-        dataset = Dataset(self.totalFilename, self.trainFilename, self.valFilename, self.testFilename, self.negativesFilename)
-        self.trainRatings, self.valRatings, self.testRatings, self.negatives, self.numUsers, self.numItems, self.userCache, self.itemCache = dataset.trainMatrix, dataset.valRatings, dataset.testRatings, dataset.negatives, dataset.numUsers, dataset.numItems, dataset.userCache, dataset.itemCache
-        
-        
+        dataset = DatasetNew(self.path)
+
         self.train = dataset.train
+        self.train_items = dataset.train_items
+        self.test = dataset.test
+        self.test_items = dataset.test_items
+        self.user_item_csr = dataset.user_item_csr
+
+        self.userCache = dataset.userCache
+        self.itemCache = dataset.itemCache
+
+        self.numUsers = dataset.numUsers
+        self.numItems = dataset.numItems
+
         self.totalTrainUsers, self.totalTrainItems = dataset.totalTrainUsers, dataset.totalTrainItems                
             
         # Evaluation
@@ -121,52 +126,93 @@ class Recommender(object):
         print("[%s] [Final] %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f" %(self.recommender, self.bestHR1, self.bestHR5, self.bestHR10, self.bestHR20, self.bestHR50, self.bestNDCG1, self.bestNDCG5, self.bestNDCG10, self.bestNDCG20, self.bestNDCG50, self.bestMRR1, self.bestMRR5, self.bestMRR10, self.bestMRR20, self.bestMRR50))
 
     def evalScore(self, model):
-        topHits = dict(); topNdcgs = dict(); topMrrs = dict()
-        trainItems = set(self.train.iid.unique())
-        for topK in self.topK:
-            hits = []; ndcgs = []; mrrs = []
-            for idx in range(len(self.test.keys())):
-                users = Variable(self.test[idx]['u'])
-                items = Variable(self.test[idx]['i'])
-                offsets = self.test[idx]['offsets']
-                
-                i_viewed_u_idx, i_viewed_u_offset, u_viewed_i_idx, u_viewed_i_offset = self.getNeighbors(users, items)
 
-                map_item_score = {}
-
-                vals, _ = model(users, items, u_viewed_i_idx, u_viewed_i_offset, i_viewed_u_idx, i_viewed_u_offset)
-                vals *= -1.0
-                if self.cuda_available == True:
-                    items = items.cpu().data.numpy().tolist()
-                    vals = vals.cpu().data.numpy().tolist()
-                    #torch.cuda.empty_cache()
-                else:
-                    items = items.data.numpy().tolist()
-                    vals = vals.data.tolist()
-
-                for i in range(len(offsets)-1):
-                    from_idx = offsets[i]
-                    to_idx = offsets[i+1]
-                    cur_items = items[from_idx:to_idx]
-                    cur_vals = vals[from_idx:to_idx]
-
-                    gtItem = cur_items[-1]
-                    
-                    map_item_score = dict(zip(cur_items, cur_vals))
-
-                    ranklist = heapq.nlargest(topK, map_item_score, key=map_item_score.get)
-                    hr = evaluation.getHitRatio(ranklist, gtItem)
-                    ndcg = evaluation.getNDCG(ranklist, gtItem)
-                    mrr = evaluation.getMRR(ranklist, gtItem)
-
-                    hits.append(hr)
-                    ndcgs.append(ndcg) 
-                    mrrs.append(mrr)
-
-            hr, ndcg, mrr = np.array(hits).mean(), np.array(ndcgs).mean(), np.array(mrrs).mean()
-            topHits[topK] = hr; topNdcgs[topK] = ndcg; topMrrs[topK] = mrr
+        pred_matrix = self.predict(model)
+        results = self.eval_rec(pred_matrix)
             
-        return topHits, topNdcgs, topMrrs
+        return results
+
+    def eval_rec(self, pred_matrix):
+        topk = 50
+        pred_matrix[self.user_item_csr.nonzero()] = np.NINF
+        ind = np.argpartition(pred_matrix, -topk)
+        ind = ind[:, -topk:]
+        arr_ind = pred_matrix[np.arange(len(pred_matrix))[:, None], ind]
+        arr_ind_argsort = np.argsort(arr_ind)[np.arange(len(pred_matrix)), ::-1]
+        pred_list = ind[np.arange(len(pred_matrix))[:, None], arr_ind_argsort]
+
+        precision, recall, MAP, ndcg = [], [], [], []
+
+        # ranking = argmax_top_k(pred_matrix, topk)  # Top-K items
+
+        for k in [5, 10, 20]:
+            precision.append(precision_at_k(self.test_items, pred_list, k))
+            recall.append(recall_at_k(self.test_items, pred_list, k))
+            # MAP.append(mapk(data.test_dict, pred_list, k))
+
+        all_ndcg = ndcg_lgcn([*self.test_items.values()], pred_list)
+        ndcg = [all_ndcg[x - 1] for x in [5, 10, 20]]
+
+        return precision, recall, ndcg
+
+    def predict(self, model):
+        num_users, num_items = self.numUsers, self.numItems
+        probs_matrix = np.zeros((num_users, num_items))
+
+        for i in trange(num_users):
+            users = torch.LongTensor(np.array([i] * num_items)).cuda(self.cuda)
+            items = torch.LongTensor(np.arange(num_items)).cuda(self.cuda)
+
+            i_viewed_u_idx, i_viewed_u_offset, u_viewed_i_idx, u_viewed_i_offset = self.getNeighbors(users, items)
+
+            vals, _ = model(users, items, u_viewed_i_idx, u_viewed_i_offset, i_viewed_u_idx, i_viewed_u_offset)
+            vals *= -1.0
+
+            if self.cuda_available == True:
+                vals = vals.detach().cpu().numpy() * -1
+            else:
+                vals = vals.numpy() * -1
+
+            probs_matrix[i] = np.reshape(vals, [-1, ])
+
+        return probs_matrix
+
+    def predict_batch(self, model):
+        num_users, num_items = self.numUsers, self.numItems
+        probs_matrix = np.zeros((num_users, num_items))
+
+        all_users = np.repeat(np.arange(num_users), num_items)
+        all_items = np.tile(np.arange(num_items), num_users)
+
+        all_probs = []
+
+        for i in trange(0, len(all_users), self.batchSize_test):
+            start = i
+            end = i + self.batchSize_test
+
+            users = all_users[start:end]
+            items = all_items[start:end]
+
+            # users = torch.LongTensor(np.array([i] * num_items)).cuda(self.cuda)
+            # items = torch.LongTensor(np.arange(num_items)).cuda(self.cuda)
+
+            i_viewed_u_idx, i_viewed_u_offset, u_viewed_i_idx, u_viewed_i_offset = self.getNeighbors(users, items)
+
+            vals, _ = model(users, items, u_viewed_i_idx, u_viewed_i_offset, i_viewed_u_idx, i_viewed_u_offset)
+            vals *= -1.0
+
+            if self.cuda_available == True:
+                vals = vals.detach().cpu().numpy() * -1
+            else:
+                vals = vals.numpy() * -1
+
+            # probs_matrix[i] = np.reshape(vals, [-1, ])
+            all_probs.extend(list(vals))
+
+        probs_matrix = np.array(all_probs).reshape(num_users, num_items)
+
+        return probs_matrix
+
     
     def getNeighbors(self, uids, iids):
         uid_idxvec = []
@@ -199,9 +245,9 @@ class Recommender(object):
             prev_len += len(items)
         
         if self.cuda_available == True:
-            return Variable(torch.LongTensor(iid_idxvec)).cuda(self.cuda), Variable(torch.LongTensor(iid_offset)).cuda(self.cuda), Variable(torch.LongTensor(uid_idxvec)).cuda(self.cuda), Variable(torch.LongTensor(uid_offset)).cuda(self.cuda)
+            return (torch.LongTensor(iid_idxvec)).cuda(self.cuda), (torch.LongTensor(iid_offset)).cuda(self.cuda), (torch.LongTensor(uid_idxvec)).cuda(self.cuda), Variable(torch.LongTensor(uid_offset)).cuda(self.cuda)
         else:
-            return Variable(torch.LongTensor(iid_idxvec)), Variable(torch.LongTensor(iid_offset)), Variable(torch.LongTensor(uid_idxvec)), Variable(torch.LongTensor(uid_offset))
+            return (torch.LongTensor(iid_idxvec)), (torch.LongTensor(iid_offset)), (torch.LongTensor(uid_idxvec)), (torch.LongTensor(uid_offset))
     
     def getTestInstances(self):
         trainItems = set(self.train.iid.unique())
@@ -250,7 +296,6 @@ class Recommender(object):
     
     
     def getTrainInstances(self):
-        trainItems = set(self.train.iid.unique())
         totalData = []
         for s in range(self.numUsers * self.num_negatives):
             while True:
@@ -265,7 +310,7 @@ class Recommender(object):
                 i = cu[t]
                 j = fastrand.pcg32bounded(self.numItems)
 
-                while j in cu or j not in trainItems:
+                while j in cu:
                     j = fastrand.pcg32bounded(self.numItems)
                     
                 break
@@ -276,3 +321,41 @@ class Recommender(object):
         
         return totalData
         
+
+def precision_at_k(actual, predicted, topk):
+    sum_precision = 0.0
+    num_users = len(actual)
+    for i, v in actual.items():
+        act_set = set(v)
+        pred_set = set(predicted[i][:topk])
+        sum_precision += len(act_set & pred_set) / float(topk)
+    return sum_precision / num_users
+
+def recall_at_k(actual, predicted, topk):
+    sum_recall = 0.0
+    num_users = len(actual)
+    true_users = 0
+    for i, v in actual.items():
+        act_set = set(v)
+        pred_set = set(predicted[i][:topk])
+        if len(act_set) != 0:
+            sum_recall += len(act_set & pred_set) / float(len(act_set))
+            true_users += 1
+    assert num_users == true_users
+    return sum_recall / true_users
+
+def ndcg_lgcn(ground_truths, ranks):
+    result = 0
+    for i, (rank, ground_truth) in enumerate(zip(ranks, ground_truths)):
+        len_rank = len(rank)
+        len_gt = len(ground_truth)
+        idcg_len = min(len_gt, len_rank)
+
+        # calculate idcg
+        idcg = np.cumsum(1.0 / np.log2(np.arange(2, len_rank + 2)))
+        idcg[idcg_len:] = idcg[idcg_len-1]
+
+        # idcg = np.cumsum(1.0/np.log2(np.arange(2, len_rank+2)))
+        dcg = np.cumsum([1.0/np.log2(idx+2) if item in ground_truth else 0.0 for idx, item in enumerate(rank)])
+        result += dcg / idcg
+    return result / len(ranks)
