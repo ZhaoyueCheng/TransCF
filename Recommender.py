@@ -127,7 +127,7 @@ class Recommender(object):
 
     def evalScore(self, model):
 
-        pred_matrix = self.predict(model)
+        pred_matrix = self.predict_batch(model)
         results = self.eval_rec(pred_matrix)
             
         return results
@@ -190,8 +190,8 @@ class Recommender(object):
             start = i
             end = i + self.batchSize_test
 
-            users = all_users[start:end]
-            items = all_items[start:end]
+            users = torch.LongTensor(all_users[start:end]).cuda(self.cuda)
+            items = torch.LongTensor(all_items[start:end]).cuda(self.cuda)
 
             # users = torch.LongTensor(np.array([i] * num_items)).cuda(self.cuda)
             # items = torch.LongTensor(np.arange(num_items)).cuda(self.cuda)

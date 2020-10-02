@@ -40,7 +40,9 @@ class TransCF(Recommender):
         # results = self.evalScore(model)
         model.train()
 
+        # print("Recall: ")
         # print('\t'.join([str(round(x, 4)) for x in results[1]]))
+        # print("NDCG: ")
         # print('\t'.join([str(round(x, 4)) for x in results[-1]]))
         
         # print("[%s] [Initial %s] %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f || %.4f, %.4f, %.4f, %.4f, %.4f"%(self.recommender, self.currentTime(), topHits[1], topHits[5], topHits[10], topHits[20], topHits[50], topNdcgs[1], topNdcgs[5], topNdcgs[10], topNdcgs[20], topNdcgs[50], topMrrs[1], topMrrs[5], topMrrs[10], topMrrs[20], topMrrs[50]))
@@ -92,12 +94,14 @@ class TransCF(Recommender):
             model.itemEmbed.weight.data.div_(torch.max(torch.norm(model.itemEmbed.weight.data, 2, 1, True), self.clip_max).expand_as(model.itemEmbed.weight.data))
             
             # Evaluate the performance every three iterations (for running time issue)
-            if epoch % 3 == 0:
+            if epoch % 100 == 0:
                 model.eval()
                 results = self.evalScore(model)
                 model.train()
 
+                print("Recall: ")
                 print('\t'.join([str(round(x, 4)) for x in results[1]]))
+                print("NDCG: ")
                 print('\t'.join([str(round(x, 4)) for x in results[-1]]))
             
             # if self.is_converged(model, epoch, totalLoss, topHits, topNdcgs, topMrrs):

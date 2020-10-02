@@ -10,17 +10,17 @@ def parse_args():
     parser.add_argument('--mode', nargs='?', default='Val', help='Validation or Test (Val, Test)')
     parser.add_argument('--early_stop', type=int, default=50, help='Early stop iteration.')
     parser.add_argument('--Ks', nargs='?', default='[5,10,20]', help="topK")
-    parser.add_argument('--numEpoch', type=int, default=500, help='Number of epochs.')
+    parser.add_argument('--numEpoch', type=int, default=510, help='Number of epochs.')
     parser.add_argument('--num_negatives', type=int, default=100, help='Number of negative samples.')
     parser.add_argument('--margin', type=float, default=1.0, help='Margin.')
     parser.add_argument('--batch_size', type=int, default=1000, help='Batch size.')
-    parser.add_argument('--batchSize_test', type=int, default=2000, help='Batch size for test.')
+    parser.add_argument('--batchSize_test', type=int, default=10000, help='Batch size for test.')
     parser.add_argument('--cuda', type=int, default=0, help='Speficy GPU number')
     parser.add_argument('--reg1', type=float, default=0.01, help='Distance Regularization.')
     parser.add_argument('--reg2', type=float, default=0.01, help='Neighborhood Regularization.')
     parser.add_argument('--embedding_dim', type=int, default=50, help='Number of embedding dimensions.')
     parser.add_argument('--rand_seed', type=int, default=34567, help='Random seed.')
-    parser.add_argument('--path', type=str, default='data/Amazon-CD', help='Random seed.')
+    parser.add_argument('--path', type=str, default='data/Amazon-CD', help='path to dataset')
     
     
     
