@@ -127,7 +127,7 @@ class Recommender(object):
 
     def evalScore(self, model):
 
-        pred_matrix = self.predict_batch(model)
+        pred_matrix = self.predict(model)
         results = self.eval_rec(pred_matrix)
             
         return results
@@ -159,7 +159,7 @@ class Recommender(object):
         num_users, num_items = self.numUsers, self.numItems
         probs_matrix = np.zeros((num_users, num_items))
 
-        for i in trange(num_users):
+        for i in range(num_users):
             users = torch.LongTensor(np.array([i] * num_items)).cuda(self.cuda)
             items = torch.LongTensor(np.arange(num_items)).cuda(self.cuda)
 
@@ -169,9 +169,9 @@ class Recommender(object):
             vals *= -1.0
 
             if self.cuda_available == True:
-                vals = vals.detach().cpu().numpy() * -1
+                vals = vals.detach().cpu().numpy()
             else:
-                vals = vals.numpy() * -1
+                vals = vals.numpy()
 
             probs_matrix[i] = np.reshape(vals, [-1, ])
 
@@ -202,9 +202,9 @@ class Recommender(object):
             vals *= -1.0
 
             if self.cuda_available == True:
-                vals = vals.detach().cpu().numpy() * -1
+                vals = vals.detach().cpu().numpy()
             else:
-                vals = vals.numpy() * -1
+                vals = vals.numpy()
 
             # probs_matrix[i] = np.reshape(vals, [-1, ])
             all_probs.extend(list(vals))

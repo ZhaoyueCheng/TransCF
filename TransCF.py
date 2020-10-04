@@ -51,14 +51,13 @@ class TransCF(Recommender):
         # bestHR = 0
         # bestNDCG = 0
         # early_stop_metric = []
-        for epoch in tqdm(range(self.numEpoch)):
+        for epoch in range(self.numEpoch):
             totalLoss = 0
             # Reading Data
             totalData = self.getTrainInstances()
-            print(len(totalData))
             train_by_dataloader = Dataset_TransCF(totalData)
             train_loader = DataLoader(dataset=train_by_dataloader, batch_size=self.batch_size, shuffle=True)
-            for batch_idx, batch in enumerate(tqdm(train_loader)):
+            for batch_idx, batch in enumerate((train_loader)):
                 u = torch.LongTensor(batch['u'])
                 i = torch.LongTensor(batch['i'])
                 j = torch.LongTensor(batch['j'])
@@ -88,17 +87,21 @@ class TransCF(Recommender):
                 optimizer.step()
 
                 totalLoss += loss.item()
-            
+
+            # print(totalLoss)
+
             # Unit-norm regularization
             model.userEmbed.weight.data.div_(torch.max(torch.norm(model.userEmbed.weight.data, 2, 1, True), self.clip_max).expand_as(model.userEmbed.weight.data))
             model.itemEmbed.weight.data.div_(torch.max(torch.norm(model.itemEmbed.weight.data, 2, 1, True), self.clip_max).expand_as(model.itemEmbed.weight.data))
             
             # Evaluate the performance every three iterations (for running time issue)
-            if epoch % 100 == 0:
+            if (epoch + 1) % 100 == 0 and epoch > 400:
                 model.eval()
                 results = self.evalScore(model)
                 model.train()
 
+                print("Epoch: ")
+                print(epoch)
                 print("Recall: ")
                 print('\t'.join([str(round(x, 4)) for x in results[1]]))
                 print("NDCG: ")
