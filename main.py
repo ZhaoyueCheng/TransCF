@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument('--reg2', type=float, default=0.01, help='Neighborhood Regularization.')
     parser.add_argument('--embedding_dim', type=int, default=50, help='Number of embedding dimensions.')
     parser.add_argument('--rand_seed', type=int, default=34567, help='Random seed.')
-    parser.add_argument('--path', type=str, default='data/yelp', help='path to dataset')
+    parser.add_argument('--path', type=str, default='data/Amazon-Book', help='path to dataset')
     
     
     
