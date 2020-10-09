@@ -52,13 +52,13 @@ class TransCF(Recommender):
         # bestHR = 0
         # bestNDCG = 0
         # early_stop_metric = []
-        for epoch in trange(self.numEpoch):
+        for epoch in range(self.numEpoch):
             totalLoss = 0
             # Reading Data
             totalData = self.getTrainInstances()
             train_by_dataloader = Dataset_TransCF(totalData)
             train_loader = DataLoader(dataset=train_by_dataloader, batch_size=self.batch_size, shuffle=True)
-            for batch_idx, batch in enumerate(tqdm(train_loader)):
+            for batch_idx, batch in enumerate((train_loader)):
                 u = torch.LongTensor(batch['u'])
                 i = torch.LongTensor(batch['i'])
                 j = torch.LongTensor(batch['j'])
