@@ -12,7 +12,7 @@ def parse_args():
     parser.add_argument('--Ks', nargs='?', default='[5,10,20]', help="topK")
     parser.add_argument('--numEpoch', type=int, default=2000, help='Number of epochs.')
     parser.add_argument('--num_negatives', type=int, default=20, help='Number of negative samples.')
-    parser.add_argument('--margin', type=float, default=0.5, help='Margin.')
+    parser.add_argument('--margin', type=float, default=1, help='Margin.')
     parser.add_argument('--batch_size', type=int, default=1000, help='Batch size.')
     parser.add_argument('--batchSize_test', type=int, default=2000, help='Batch size for test.')
     parser.add_argument('--cuda', type=int, default=0, help='Speficy GPU number')
